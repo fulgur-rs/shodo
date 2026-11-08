@@ -693,7 +693,7 @@ fn alternate_levels_stack_on_literal_physical_sides_in_both_vertical_modes() {
 #[test]
 fn overhang_checks_the_visual_neighbor_inside_an_opposing_bidi_box() {
     for (bidi, origin) in [
-        (shodo::style::UnicodeBidi::BidiOverride, 0.0),
+        (shodo::style::UnicodeBidi::BidiOverride, 72.0),
         (shodo::style::UnicodeBidi::IsolateOverride, 72.0),
     ] {
         let mut b = ParagraphBuilder::new(
@@ -729,8 +729,9 @@ fn overhang_checks_the_visual_neighbor_inside_an_opposing_bidi_box() {
             "{bidi:?}: the48px glyph is the actual visual neighbor, so no6px hang is safe"
         );
         let reading = line.ruby_annotations().next().unwrap();
-        // An override's embedding also resolves the following neutral isolate;
-        // isolate-override keeps the ruby after the independent neighboring box.
+        // The ruby is an isolate, a neutral at the paragraph level after the
+        // override (or isolate-override) box ends, so it stays after that
+        // box in both cases (as in Chromium).
         assert_eq!(reading.origin().0, origin, "{bidi:?}");
     }
 }
@@ -1022,9 +1023,12 @@ fn rtl_content(node: u64, text: &str, size: f32, override_rtl: bool) -> RubyCont
 #[test]
 fn rtl_columns_hang_only_over_the_neighbor_at_their_actual_visual_edge() {
     use shodo::geometry::Direction;
+    // Each base is an isolate, so a right-to-left ruby orders its bases from
+    // the right even when their text is left-to-right (as in Chromium): the
+    // first base is the visual right column with or without the override.
     for (override_rtl, plain_on_right, want, origin) in [
-        (false, false, 102.0, 18.0),
-        (false, true, 108.0, 24.0),
+        (false, false, 108.0, 48.0),
+        (false, true, 102.0, 48.0),
         (true, false, 108.0, 48.0),
         (true, true, 102.0, 48.0),
     ] {
@@ -1122,7 +1126,7 @@ fn rtl_columns_hang_only_over_the_neighbor_at_their_actual_visual_edge() {
 fn rtl_spanning_and_merged_readings_follow_actual_column_geometry() {
     for (override_rtl, merge, first_origin, second_origin) in [
         (false, shodo::RubyMerge::Separate, 24.0, 0.0),
-        (false, shodo::RubyMerge::Merge, 24.0, 60.0),
+        (false, shodo::RubyMerge::Merge, 60.0, 24.0),
         (true, shodo::RubyMerge::Separate, 24.0, 0.0),
         (true, shodo::RubyMerge::Merge, 60.0, 24.0),
     ] {
@@ -1641,7 +1645,7 @@ fn annotation_line_height_is_ignored_while_actual_descendant_font_size_is_retain
 
 #[test]
 fn inter_character_spanning_reading_uses_the_actual_rightmost_bidi_column() {
-    for (override_rtl, first, second) in [(false, 0.0, 24.0), (true, 48.0, 0.0)] {
+    for (override_rtl, first, second) in [(false, 48.0, 0.0), (true, 48.0, 0.0)] {
         let ruby = Ruby::new(
             vec![
                 RubyBase {
