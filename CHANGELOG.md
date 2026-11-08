@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.41](https://github.com/fulgur-rs/shodo/compare/v0.0.40...v0.0.41) - 2026-11-08
+
+### Fixed
+
+- shape probes ahead only when the loop could shape them itself
+
+### Other
+
+- keep only the instance inputs in window instance entries
+- take a window's shape from its safe right-hand probe
+- share edge-window font instances across paragraphs
+
 ## [0.0.40](https://github.com/fulgur-rs/shodo/compare/v0.0.39...v0.0.40) - 2026-11-03
 
 ### Added
