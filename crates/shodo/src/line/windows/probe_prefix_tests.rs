@@ -82,7 +82,15 @@ fn paragraph(font: Vec<u8>, text: &str) -> crate::Paragraph {
 }
 
 fn paragraph_spaced(font: Vec<u8>, text: &str, letter_spacing: f32) -> crate::Paragraph {
-    let limits = Limits::default();
+    paragraph_limited(font, text, letter_spacing, Limits::default())
+}
+
+fn paragraph_limited(
+    font: Vec<u8>,
+    text: &str,
+    letter_spacing: f32,
+    limits: Limits,
+) -> crate::Paragraph {
     let fonts = FontCollection::with_options(
         &limits,
         FontOptions {
@@ -187,9 +195,12 @@ fn probe_prefixes_leave_layout_unchanged() {
         "x 12\u{a0}34 1-2 (1) 11",
         "1 1 1 1 11 111",
     ];
+    // Fills the edge cache, so later windows are shaped but not retained.
+    let long = "x 12 ".repeat(200);
+    let texts = texts.iter().copied().chain([long.as_str()]);
     let (mut fast_calls, mut reference_calls) = (0, 0);
     for (font, letter_spacing) in fonts.iter().flat_map(|f| [(f, 0.0), (f, 1.5)]) {
-        for text in texts {
+        for text in texts.clone() {
             let p = paragraph_spaced(font.clone(), text, letter_spacing);
             let calls = || p.data.edge_shape_calls.load(Ordering::Relaxed);
             let widths = [0.0, 8.0, 20.0, 40.0];
@@ -211,5 +222,32 @@ fn probe_prefixes_leave_layout_unchanged() {
     assert!(
         fast_calls < reference_calls,
         "{fast_calls} >= {reference_calls}"
+    );
+}
+
+/// Once an operation's reshape allowance runs out, the loop shapes no more
+/// windows, and probes are not shaped ahead of it either. Each word here
+/// charges 4 bytes against an allowance of 4 * 64, so min-content runs out.
+#[test]
+fn probes_are_not_shaped_past_the_reshape_budget() {
+    let limits = Limits {
+        max_reshape_window_bytes: Some(4),
+        ..Limits::default()
+    };
+    let text = "x 12 ".repeat(200);
+    let p = paragraph_limited(pair_kerned_latin(&[(' ', '1', -200)]), &text, 0.0, limits);
+    let calls = || p.data.edge_shape_calls.load(Ordering::Relaxed);
+    let before = calls();
+    let fast = layout(&p, &[0.0, 20.0]);
+    let fast_calls = calls() - before;
+    PROBE_PREFIX_DISABLED.with(|d| d.set(true));
+    let before = calls();
+    let reference = layout(&p, &[0.0, 20.0]);
+    let reference_calls = calls() - before;
+    PROBE_PREFIX_DISABLED.with(|d| d.set(false));
+    assert_eq!(fast, reference);
+    assert!(
+        fast_calls <= reference_calls,
+        "{fast_calls} > {reference_calls}"
     );
 }
