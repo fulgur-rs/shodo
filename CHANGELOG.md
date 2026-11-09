@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.42](https://github.com/fulgur-rs/shodo/compare/v0.0.41...v0.0.42) - 2026-11-08
+
+### Fixed
+
+- *(bidi)* move line-end isolate controls past every closing edge
+- *(bidi)* keep reissued isolate controls outside cloned box edges
+- *(bidi)* keep isolate controls as separators when reordering a line
+
+### Other
+
+- Merge pull request #395 from fulgur-rs/claude/project-thread-sdrw91
+
 ## [0.0.41](https://github.com/fulgur-rs/shodo/compare/v0.0.40...v0.0.41) - 2026-11-08
 
 ### Fixed
