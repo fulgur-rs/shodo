@@ -3,6 +3,8 @@
 mod build;
 #[cfg(test)]
 mod edge_percent_tests;
+#[cfg(test)]
+mod edge_side_tests;
 
 use std::collections::{BTreeMap, HashMap};
 use std::fmt;
