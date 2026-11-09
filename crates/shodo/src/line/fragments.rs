@@ -72,9 +72,15 @@ pub(crate) enum GlyphSource {
 /// Writing Modes 4 §2.4.1). Bidi *levels* are not a reliable proxy: an
 /// isolate or embedding initiator's unit takes the level in effect just
 /// before the isolate (UAX #9), not the level of the box's own content.
-fn box_reversed(data: &ParagraphData, box_index: u32) -> bool {
-    let info = &data.boxes[box_index as usize];
-    data.styles[info.style as usize].direction != data.style.direction
+/// Both sides are used directions: upright text in vertical writing modes
+/// is left-to-right, and the paragraph's is its base level, which runs the
+/// line's visual order from the right when odd.
+pub(crate) fn box_reversed(data: &ParagraphData, box_index: u32) -> bool {
+    let style = &data.styles[data.boxes[box_index as usize].style as usize];
+    let rtl = style.direction == crate::geometry::Direction::Rtl
+        && !(data.style.writing_mode.is_typographic_vertical()
+            && style.text_orientation == crate::style::TextOrientation::Upright);
+    rtl != (data.base_level % 2 == 1)
 }
 
 #[derive(Clone, Debug)]
@@ -338,7 +344,24 @@ pub(crate) fn build(
     leading: Option<&[LayoutUnit]>,
 ) -> Built {
     let base = data.base_level;
-    let (mut records, mut tabs) = if data.units[units.clone()].iter().all(|u| u.level == base) {
+    // A box whose direction opposes the paragraph's puts its start edge on
+    // the far side of its content even when no level changes on the line;
+    // only the reordering path moves edges to the box's own sides.
+    let plain = units.clone().zip(widths).all(|(i, w)| {
+        let u = &data.units[i];
+        u.level == base
+            && !(*w != LayoutUnit::ZERO
+                && matches!(u.kind, UnitKind::Open { box_index } | UnitKind::Close { box_index }
+                    if box_reversed(data, box_index)))
+    }) && !super::decoration::ancestors(data, units.start)
+        .chain(super::decoration::ancestors(data, units.end))
+        .any(|b| {
+            let edges = &data.boxes[b as usize].edges;
+            super::decoration::cloned(data, b)
+                && box_reversed(data, b)
+                && (edges.inline_start_total() != 0.0 || edges.inline_end_total() != 0.0)
+        });
+    let (mut records, mut tabs) = if plain {
         build_logical(
             data,
             units.clone(),
@@ -861,6 +884,7 @@ fn build_bidi(
         });
     }
     pieces.append(&mut line_end_seps);
+    let hang_from = pieces.len();
     continuations.extend(
         hanging_continuations
             .into_iter()
@@ -878,6 +902,7 @@ fn build_bidi(
     if data.base_level % 2 == 1 {
         order.reverse();
     }
+    let order = place_edges(data, &pieces, hang_from, order);
     let mut starts = vec![LayoutUnit::ZERO; pieces.len()];
     let mut pos = origin;
     for &p in &order {
@@ -1006,6 +1031,152 @@ fn build_bidi(
         })
         .collect();
     (out.into_iter().map(|(r, _, _)| r).collect(), tabs)
+}
+
+/// Moves the edge pieces of each visually contiguous part of an inline box
+/// to the sides its own `direction` gives them: the start edge first (in
+/// `order`, which runs from the line's inline-start) unless the box opposes
+/// the paragraph's direction, then last (CSS Writing Modes 4 §2.4.1). L2
+/// reorders an edge by its bidi level, which is the level around the box,
+/// so the reordered edge can land on the side of the box's other edge.
+/// Zero-width edges are left where they are: moving one inside its part
+/// changes no position and no part. Pieces from `hang_from` on are the
+/// line's hanging spaces, which stay after everything else, so they belong
+/// to no part here.
+fn place_edges(
+    data: &ParagraphData,
+    pieces: &[Piece],
+    hang_from: usize,
+    mut order: Vec<usize>,
+) -> Vec<usize> {
+    let owner = |p: usize| if p < hang_from { pieces[p].owner } else { None };
+    // Moving an outer box's edge out from between two parts of an inner box
+    // joins those parts, which can leave the inner box's edge inside the
+    // joined part; another pass moves it. Every pass that moves anything
+    // joins parts or ends one with its edge; a pass that changes nothing
+    // would change nothing again.
+    while misplaced(data, pieces, &owner, &order) {
+        let next = move_edges(data, pieces, &owner, &order);
+        if next == order {
+            break;
+        }
+        order = next;
+    }
+    order
+}
+
+/// Whether a nonzero edge does not end its part: the piece beyond it on its
+/// side is in the box too. Parts are the maximal runs of the box's pieces.
+fn misplaced(
+    data: &ParagraphData,
+    pieces: &[Piece],
+    owner: &impl Fn(usize) -> Option<u32>,
+    order: &[usize],
+) -> bool {
+    order.iter().enumerate().any(|(k, &p)| {
+        let piece = &pieces[p];
+        let Some((b, is_start)) = piece.edge else {
+            return false;
+        };
+        if piece.width == LayoutUnit::ZERO || owner(p) != Some(b) {
+            return false;
+        }
+        let beyond = if is_start != box_reversed(data, b) {
+            k.checked_sub(1)
+        } else {
+            Some(k + 1)
+        };
+        beyond
+            .and_then(|k| order.get(k))
+            .is_some_and(|&q| inside(data, owner(q), b))
+    })
+}
+
+fn move_edges(
+    data: &ParagraphData,
+    pieces: &[Piece],
+    owner: &impl Fn(usize) -> Option<u32>,
+    order: &[usize],
+) -> Vec<usize> {
+    struct Part {
+        first: Option<usize>,
+        last: Option<usize>,
+    }
+    let mut parts: Vec<Part> = Vec::new();
+    // Per position in `order`: parts closed before it, parts opened at it.
+    let mut events: Vec<(u32, u32)> = Vec::with_capacity(order.len());
+    let mut moved = vec![false; pieces.len()];
+    let mut open: Vec<(u32, usize)> = Vec::new();
+    let mut chain: Vec<u32> = Vec::new();
+    for &p in order {
+        let piece = &pieces[p];
+        let own = owner(p);
+        if own == open.last().map(|&(b, _)| b) {
+            events.push((0, 0));
+        } else {
+            chain.clear();
+            let mut b = own;
+            while let Some(x) = b {
+                chain.push(x);
+                b = data.boxes[x as usize].parent;
+            }
+            chain.reverse();
+            let keep = open
+                .iter()
+                .zip(&chain)
+                .take_while(|&(&(o, _), &b)| o == b)
+                .count();
+            let closes = open.len() - keep;
+            open.truncate(keep);
+            for &b in &chain[keep..] {
+                parts.push(Part {
+                    first: None,
+                    last: None,
+                });
+                open.push((b, parts.len() - 1));
+            }
+            events.push((closes as u32, (chain.len() - keep) as u32));
+        }
+        if let Some((b, is_start)) = piece.edge
+            && piece.width != LayoutUnit::ZERO
+            && own == Some(b)
+            && let Some(&(top, n)) = open.last()
+            && top == b
+        {
+            let part = &mut parts[n];
+            let slot = if is_start != box_reversed(data, b) {
+                &mut part.first
+            } else {
+                &mut part.last
+            };
+            if slot.is_none() {
+                *slot = Some(p);
+                moved[p] = true;
+            }
+        }
+    }
+    let mut out = Vec::with_capacity(order.len());
+    let mut stack: Vec<usize> = Vec::new();
+    let mut next = 0;
+    for (&p, &(closes, opens)) in order.iter().zip(&events) {
+        for _ in 0..closes {
+            if let Some(n) = stack.pop() {
+                out.extend(parts[n].last);
+            }
+        }
+        for _ in 0..opens {
+            out.extend(parts[next].first);
+            stack.push(next);
+            next += 1;
+        }
+        if !moved[p] {
+            out.push(p);
+        }
+    }
+    while let Some(n) = stack.pop() {
+        out.extend(parts[n].last);
+    }
+    out
 }
 
 /// A visually contiguous part of an inline box on one reordered line.

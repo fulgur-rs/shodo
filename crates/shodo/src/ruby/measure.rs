@@ -885,27 +885,23 @@ pub(crate) fn apply(
             let cross = fragment.cross_columns[i];
             if cross != LayoutUnit::ZERO {
                 let base_box = ruby.columns[fragment.column_start + i].box_index;
-                // Strong text may oppose the base's declared direction.
-                // Reserve on the edge that actually reorders to physical right.
-                let right_at_start = data.base_level % 2 == 1;
+                // Edges sit on the sides of the base box's own direction
+                // (see `place_edges`): its start edge is on the line's
+                // inline-start side, which is the physical right when the
+                // line runs from the right, unless the box is reversed.
+                let right_at_start = base_box.is_some_and(|b| {
+                    (data.base_level % 2 == 1) != crate::line::fragments::box_reversed(data, b)
+                });
                 let unit = base
                     .clone()
-                    .find(|j| {
-                        let u = &data.units[*j];
-                        let same = u.level % 2 == data.base_level % 2;
-                        match u.kind {
-                            crate::analysis::units::UnitKind::Open { box_index }
-                                if Some(box_index) == base_box =>
-                            {
-                                same == right_at_start
-                            }
-                            crate::analysis::units::UnitKind::Close { box_index }
-                                if Some(box_index) == base_box =>
-                            {
-                                same != right_at_start
-                            }
-                            _ => false,
+                    .find(|j| match data.units[*j].kind {
+                        crate::analysis::units::UnitKind::Open { box_index } => {
+                            Some(box_index) == base_box && right_at_start
                         }
+                        crate::analysis::units::UnitKind::Close { box_index } => {
+                            Some(box_index) == base_box && !right_at_start
+                        }
+                        _ => false,
                     })
                     .or_else(|| {
                         base.clone().find(|i| {

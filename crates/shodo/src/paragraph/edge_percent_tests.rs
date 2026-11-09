@@ -473,11 +473,12 @@ fn rtl_inline_start_is_on_the_right() {
     for offset in [0, 2, 4] {
         assert_eq!(run_start(&l, offset), run_start(&px_start, offset));
     }
-    // Runs are placed left to right as "ef", "cd", "ab": the padding opens
-    // to the right of the box's text, so only the logically preceding "ab"
-    // moves.
+    // The Latin text is one left-to-right run, so its offsets from the
+    // line's inline-start (right) edge run "ef", "cd", "ab". The box is
+    // right-to-left, so its inline-start padding is on its physical right,
+    // between "cd" and "ef": "cd" and "ab" move, "ef" stays.
     assert!(close(run_start(&l, 0), run_start(&plain, 0) + 20.0));
-    assert_eq!(run_start(&l, 2), run_start(&plain, 2));
+    assert!(close(run_start(&l, 2), run_start(&plain, 2) + 20.0));
     assert_eq!(run_start(&l, 4), run_start(&plain, 4));
     assert!(run_start(&l, 4) < run_start(&l, 2) && run_start(&l, 2) < run_start(&l, 0));
 }

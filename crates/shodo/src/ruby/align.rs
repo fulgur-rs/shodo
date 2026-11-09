@@ -213,7 +213,15 @@ fn distribute(
         let group = &groups[logical];
         let (before, after) = gaps[visual];
         if group.ruby {
-            let (head, tail) = if group.level % 2 == data.base_level % 2 {
+            // A container box's edges sit on the sides of its own direction
+            // (see `place_edges`); other heads follow their level.
+            let forward = match data.units[group.head].kind {
+                UnitKind::Open { box_index } => {
+                    !crate::line::fragments::box_reversed(data, box_index)
+                }
+                _ => group.level % 2 == data.base_level % 2,
+            };
+            let (head, tail) = if forward {
                 (before, after)
             } else {
                 (after, before)
