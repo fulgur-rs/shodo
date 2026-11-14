@@ -431,7 +431,7 @@ impl RangeIndex {
             carry = result.balance(&group.children, group.level % 2 == 1, data);
         }
         result.root = carry;
-        result.nodes.shrink_to_fit();
+        crate::paragraph::trim(&mut result.nodes);
         result
     }
 

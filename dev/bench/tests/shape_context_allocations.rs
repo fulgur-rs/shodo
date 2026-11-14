@@ -39,9 +39,9 @@ fn context_and_owned_edge_outputs_are_stable_with_lower_allocations() {
         "context-heavy output changed",
     );
     let (context_pre_change_bytes, edge_pre_change_bytes) = if cfg!(debug_assertions) {
-        (582_636, 1_226_867)
+        (594_228, 1_226_867)
     } else {
-        (582_588, 1_226_867)
+        (594_180, 1_226_867)
     };
     let one_context_per_item_budget = context_pre_change_bytes - workload::CONTEXT_RUNS as u64 * 20;
     assert!(

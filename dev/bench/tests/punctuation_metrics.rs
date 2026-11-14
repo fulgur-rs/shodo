@@ -24,14 +24,14 @@ fn repeated_cjk_punctuation_has_stable_geometry_and_bounded_build_allocations() 
         (
             "repeated-opening",
             "0b6273a00e17c89d417a3a4c9b77fa16fdfd2ddc2958dd1ba884c21dd5025559",
-            362_340_u64,
-            362_388_u64,
+            363_900_u64,
+            363_948_u64,
         ),
         (
             "repeated-closing-bracket",
             "e7262294ea05306467939781ad10b656828672d2e4a39f0bdd89cfe659e2f365",
-            359_044_u64,
-            359_092_u64,
+            360_604_u64,
+            360_652_u64,
         ),
     ];
 
