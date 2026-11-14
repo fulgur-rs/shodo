@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.43](https://github.com/fulgur-rs/shodo/compare/v0.0.42...v0.0.43) - 2026-11-14
+
+### Fixed
+
+- *(bidi)* place inline box edges on the sides of the box's own direction
+
+### Other
+
+- Iterate the selection oracle's lines without indexing
+- trim only the vectors that are cheap to move
+- Iterate the selection lines and break profiles without indexing
+- release the spare room of a built paragraph's vectors
+
 ## [0.0.42](https://github.com/fulgur-rs/shodo/compare/v0.0.41...v0.0.42) - 2026-11-08
 
 ### Fixed
