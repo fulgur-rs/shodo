@@ -5,6 +5,8 @@ mod build;
 mod edge_percent_tests;
 #[cfg(test)]
 mod edge_side_tests;
+#[cfg(test)]
+mod spare_capacity_tests;
 
 use std::collections::{BTreeMap, HashMap};
 use std::fmt;
@@ -155,7 +157,64 @@ pub(crate) struct ParagraphData {
     pub(crate) baselines: HashMap<NodeId, BaselineKind>,
 }
 
+/// The most bytes a vector may hold for [`trim`] to move it.
+const TRIM_BYTES: usize = 1024;
+
+/// Give back the spare room of `values` when moving them is cheap.
+pub(crate) fn trim<T>(values: &mut Vec<T>) {
+    if std::mem::size_of_val(values.as_slice()) <= TRIM_BYTES {
+        values.shrink_to_fit();
+    }
+}
+
 impl ParagraphData {
+    /// Give back the room its small vectors grew beyond their lengths. A
+    /// paragraph is not extended once it is built, and a vector grows to
+    /// four elements on its first push, so a paragraph of a few words would
+    /// otherwise keep several times the room its data needs. A larger vector
+    /// keeps its room, which is at most as large as its contents, rather
+    /// than be copied once more.
+    pub(crate) fn release_spare_capacity(&mut self) {
+        if self.text.len() <= TRIM_BYTES {
+            self.text.shrink_to_fit();
+        }
+        trim(&mut self.source_spans);
+        trim(&mut self.items);
+        trim(&mut self.styles);
+        trim(&mut self.combine_spans);
+        trim(&mut self.style_metrics);
+        trim(&mut self.autospace_spaces);
+        trim(&mut self.unit_spacing);
+        trim(&mut self.punctuation);
+        trim(&mut self.internal_autospace_gaps);
+        trim(&mut self.clusters);
+        trim(&mut self.selectable_clusters);
+        trim(&mut self.shaping_barriers);
+        trim(&mut self.glyph_clusters);
+        trim(&mut self.floats);
+        trim(&mut self.runs);
+        trim(&mut self.shape_items);
+        trim(&mut self.units);
+        trim(&mut self.boxes);
+        trim(&mut self.clone_widths);
+        trim(&mut self.bidi_paragraphs);
+        trim(&mut self.warnings);
+        let glyphs = &mut self.glyphs;
+        trim(&mut glyphs.id);
+        trim(&mut glyphs.advance);
+        trim(&mut glyphs.pen);
+        trim(&mut glyphs.offset_inline);
+        trim(&mut glyphs.offset_block);
+        trim(&mut glyphs.cluster);
+        trim(&mut glyphs.flags);
+        let breaks = &mut self.breaks;
+        trim(&mut breaks.graphemes);
+        trim(&mut breaks.typographic_starts);
+        trim(&mut breaks.authored_bidi_controls);
+        trim(&mut breaks.caret_cuts);
+        trim(&mut breaks.opportunities);
+    }
+
     /// Center a composition on its containing inline's text-over/under edges,
     /// before the inline's vertical-align displacement is applied.
     pub(crate) fn combine_center_shift(&self, style: u32) -> f32 {

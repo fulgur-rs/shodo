@@ -91,8 +91,13 @@ impl Breaks {
             prepared.first = selected.start;
             prepared.through = selected.start;
         }
-        for i in prepared.through..selected.end {
-            let p = &self.profiles[i];
+        for (i, p) in self
+            .profiles
+            .iter()
+            .enumerate()
+            .take(selected.end)
+            .skip(prepared.through)
+        {
             let all = eligible(data, q, range.start, p.unit, None, cx);
             let kept = eligible(data, q, range.start, p.unit, Some(range.start), cx);
             update(

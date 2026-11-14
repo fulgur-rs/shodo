@@ -169,10 +169,16 @@ fn linear(layout: &LineLayout<'_>, a: TextPosition, b: TextPosition) -> Vec<Logi
         return Vec::new();
     };
     let mut result = Vec::new();
-    for line in a.line..=b.line {
+    for (line, index) in layout
+        .index
+        .iter()
+        .enumerate()
+        .take(b.line + 1)
+        .skip(a.line)
+    {
         let from = if line == a.line { a.offset } else { 0 };
         let to = if line == b.line { b.offset } else { u32::MAX };
-        let mut rects: Vec<_> = layout.index[line]
+        let mut rects: Vec<_> = index
             .segments
             .iter()
             .filter(|s| {
