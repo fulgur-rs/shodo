@@ -38,11 +38,10 @@ impl LineLayout<'_> {
             return Vec::new();
         }
         let mut result = Vec::new();
-        for line in a.line..=b.line {
+        for (line, index) in self.index.iter().enumerate().take(b.line + 1).skip(a.line) {
             let from = if line == a.line { a.offset } else { 0 };
             let to = if line == b.line { b.offset } else { u32::MAX };
             let mut rects = Vec::new();
-            let index = &self.index[line];
             index.source.for_each(from, to, &index.segments, |s| {
                 #[cfg(test)]
                 tests::visit();
