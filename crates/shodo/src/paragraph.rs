@@ -5,6 +5,8 @@ mod build;
 mod edge_percent_tests;
 #[cfg(test)]
 mod edge_side_tests;
+#[cfg(test)]
+mod spare_capacity_tests;
 
 use std::collections::{BTreeMap, HashMap};
 use std::fmt;
@@ -156,6 +158,48 @@ pub(crate) struct ParagraphData {
 }
 
 impl ParagraphData {
+    /// Give back the room its vectors grew beyond their lengths. A paragraph
+    /// is not extended once it is built, and a short one would otherwise
+    /// keep several times the room its data needs.
+    pub(crate) fn release_spare_capacity(&mut self) {
+        self.text.shrink_to_fit();
+        self.source_spans.shrink_to_fit();
+        self.items.shrink_to_fit();
+        self.styles.shrink_to_fit();
+        self.combine_spans.shrink_to_fit();
+        self.style_metrics.shrink_to_fit();
+        self.autospace_spaces.shrink_to_fit();
+        self.unit_spacing.shrink_to_fit();
+        self.punctuation.shrink_to_fit();
+        self.internal_autospace_gaps.shrink_to_fit();
+        self.clusters.shrink_to_fit();
+        self.selectable_clusters.shrink_to_fit();
+        self.shaping_barriers.shrink_to_fit();
+        self.glyph_clusters.shrink_to_fit();
+        self.floats.shrink_to_fit();
+        self.runs.shrink_to_fit();
+        self.shape_items.shrink_to_fit();
+        self.units.shrink_to_fit();
+        self.boxes.shrink_to_fit();
+        self.clone_widths.shrink_to_fit();
+        self.bidi_paragraphs.shrink_to_fit();
+        self.warnings.shrink_to_fit();
+        let glyphs = &mut self.glyphs;
+        glyphs.id.shrink_to_fit();
+        glyphs.advance.shrink_to_fit();
+        glyphs.pen.shrink_to_fit();
+        glyphs.offset_inline.shrink_to_fit();
+        glyphs.offset_block.shrink_to_fit();
+        glyphs.cluster.shrink_to_fit();
+        glyphs.flags.shrink_to_fit();
+        let breaks = &mut self.breaks;
+        breaks.graphemes.shrink_to_fit();
+        breaks.typographic_starts.shrink_to_fit();
+        breaks.authored_bidi_controls.shrink_to_fit();
+        breaks.caret_cuts.shrink_to_fit();
+        breaks.opportunities.shrink_to_fit();
+    }
+
     /// Center a composition on its containing inline's text-over/under edges,
     /// before the inline's vertical-align displacement is applied.
     pub(crate) fn combine_center_shift(&self, style: u32) -> f32 {

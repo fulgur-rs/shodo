@@ -534,6 +534,7 @@ impl Paragraph {
             alternate.edge_template = edge_template.clone();
         }
         data.edge_template = edge_template;
+        data.release_spare_capacity();
         Ok(Paragraph {
             data: Arc::new(data),
         })
