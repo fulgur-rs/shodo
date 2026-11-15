@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.44](https://github.com/fulgur-rs/shodo/compare/v0.0.43...v0.0.44) - 2026-11-15
+
+### Other
+
+- share the style and limits of paragraphs built with one context
+
 ## [0.0.43](https://github.com/fulgur-rs/shodo/compare/v0.0.42...v0.0.43) - 2026-11-14
 
 ### Fixed
