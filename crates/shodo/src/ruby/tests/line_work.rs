@@ -11,7 +11,7 @@ use crate::{AtomicIntrinsics, AtomicSizes, LayoutContext, LineConstraint, Paragr
 fn with_factor(mut p: Paragraph, factor: Option<u64>) -> Paragraph {
     std::sync::Arc::get_mut(&mut p.data)
         .unwrap()
-        .limits
+        .limits_mut()
         .max_ruby_line_work = factor;
     p
 }
@@ -83,7 +83,7 @@ fn zero_factor_fits_without_ruby_and_places_ruby_exactly() {
     let mut wide = |factor| {
         std::sync::Arc::get_mut(&mut p.data)
             .unwrap()
-            .limits
+            .limits_mut()
             .max_ruby_line_work = factor;
         let mut cx = mode_context(Mode::Accumulate);
         let result = p.next_line(

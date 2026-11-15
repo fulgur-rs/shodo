@@ -17,24 +17,26 @@ fn ligature_split_outputs_stay_stable_with_lower_build_allocations() {
     let fonts = load_fonts(&limits).unwrap();
     // Re-measured with SHODO-56 reverted and the decoration-work budget in
     // place. The split cases still save 1,632 bytes and 59 allocations.
+    // Each baseline includes the 48 bytes the first paragraph of a context
+    // spends on holding its style and limits behind shared pointers.
     let expected = [
         (
             "fi-splits",
             "1a539e47a86309e87725d86e4b200a0e6e712524da3e3df0f2d9ebb8ab8ba580",
-            636_560_u64,
-            636_536_u64,
+            636_608_u64,
+            636_584_u64,
         ),
         (
             "ffi-splits",
             "5fb7d0ae69ca8f5d89c1b9b38b27e54b82eec61dacb4a175fb04e175a2f78711",
-            1_198_416_u64,
-            1_198_392_u64,
+            1_198_464_u64,
+            1_198_440_u64,
         ),
         (
             "unsplit-control",
             "bfd516e533fa85e7e49872556f95aabb3cdf3e9be5bc14dbe738aecb0e584be6",
-            535_658_u64,
-            535_634_u64,
+            535_706_u64,
+            535_682_u64,
         ),
     ];
 

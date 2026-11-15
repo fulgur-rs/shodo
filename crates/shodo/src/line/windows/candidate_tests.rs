@@ -66,8 +66,8 @@ fn selected_windows_reuse_unused_summary_space_after_probe_snapshots_fill() {
         let mut p = paragraph(text, arabic, &Limits::default());
         let data = Arc::get_mut(&mut p.data).unwrap();
         if unlimited {
-            data.limits.max_reshape_window_bytes = None;
-            data.limits.max_shaped_glyphs = None;
+            data.limits_mut().max_reshape_window_bytes = None;
+            data.limits_mut().max_shaped_glyphs = None;
         }
         let mut cx = LayoutContext::new();
         fill_probe_snapshots(data, &mut cx);
@@ -191,8 +191,8 @@ fn borrowed_candidates_preserve_owned_measurement_effects() {
         for (window_bytes, glyph_budget) in [(None, None), (Some(2), None), (None, Some(1))] {
             let mut p = paragraph(text, arabic, &Limits::default());
             let data = Arc::get_mut(&mut p.data).unwrap();
-            data.limits.max_reshape_window_bytes = window_bytes;
-            data.limits.max_shaped_glyphs = glyph_budget;
+            data.limits_mut().max_reshape_window_bytes = window_bytes;
+            data.limits_mut().max_shaped_glyphs = glyph_budget;
             let mut owned_cx = LayoutContext::new();
             let mut borrowed_cx = LayoutContext::new();
             // Include a budget crossing and a globally suppressed warning sink.

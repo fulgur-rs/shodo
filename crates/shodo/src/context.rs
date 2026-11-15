@@ -58,6 +58,9 @@ pub struct LayoutContext {
     /// Style metrics of earlier paragraphs, reused while their font
     /// collection is unchanged.
     pub(crate) style_metrics: crate::line::font_metrics::StyleMetricsMemo,
+    /// The style and limits of the paragraph built last, shared with the
+    /// next paragraph that is given the same ones.
+    pub(crate) paragraph_inputs: crate::paragraph::SharedInputs,
     /// Admit every ruby probe: tests that sweep every range of a paragraph
     /// in one operation (not a layout call) check reuse exactness alone.
     #[cfg(test)]

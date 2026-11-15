@@ -12,6 +12,7 @@ use crate::paragraph::Paragraph;
 use crate::style::{InlineStyle, ParagraphStyle};
 
 mod style_key;
+pub(crate) use style_key::same_inline;
 
 /// Input as recorded, before white-space processing.
 #[derive(Clone, Debug)]
