@@ -203,7 +203,7 @@ fn hash_inline(style: &InlineStyle, state: &mut impl Hasher) {
     inline_fields!(hash_fields, style, state);
 }
 
-fn same_inline(a: &InlineStyle, b: &InlineStyle) -> bool {
+pub(crate) fn same_inline(a: &InlineStyle, b: &InlineStyle) -> bool {
     inline_fields!(equal_fields, a, b)
 }
 

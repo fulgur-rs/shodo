@@ -1323,7 +1323,7 @@ pub(crate) fn shape_window_edit(
     let index = data
         .shape_items
         .partition_point(|item| item.end <= unit.text.start);
-    let mut limits = data.limits.clone();
+    let mut limits = Limits::clone(&data.limits);
     limits.max_shaped_glyphs = glyph_budget;
     let mut ledger = LimitsLedger::new(&limits);
     let result =

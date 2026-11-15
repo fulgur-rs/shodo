@@ -20,18 +20,21 @@ fn repeated_cjk_punctuation_has_stable_geometry_and_bounded_build_allocations() 
     // Allocator calls and output hashes stay unchanged. Metrics-construction
     // counts are checked independently by line::punctuation unit tests.
     // See docs/records/2026-10-26-shodo-56-allocation-oracles.md.
+    // A paragraph holds its style and limits behind shared pointers: the
+    // first paragraph a context builds allocates both, 48 bytes more than
+    // holding them inline.
     let expected = [
         (
             "repeated-opening",
             "0b6273a00e17c89d417a3a4c9b77fa16fdfd2ddc2958dd1ba884c21dd5025559",
-            363_900_u64,
             363_948_u64,
+            363_996_u64,
         ),
         (
             "repeated-closing-bracket",
             "e7262294ea05306467939781ad10b656828672d2e4a39f0bdd89cfe659e2f365",
-            360_604_u64,
             360_652_u64,
+            360_700_u64,
         ),
     ];
 

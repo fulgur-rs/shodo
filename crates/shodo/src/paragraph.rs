@@ -6,6 +6,8 @@ mod edge_percent_tests;
 #[cfg(test)]
 mod edge_side_tests;
 #[cfg(test)]
+mod shared_input_tests;
+#[cfg(test)]
 mod spare_capacity_tests;
 
 use std::collections::{BTreeMap, HashMap};
@@ -103,8 +105,11 @@ pub(crate) struct ParagraphData {
     pub(crate) edge_basis: f32,
     pub(crate) source_spans: Vec<crate::mapping::TransformSpan>,
     pub(crate) id: u64,
-    pub(crate) style: ParagraphStyle,
-    pub(crate) limits: Limits,
+    /// Shared with the paragraphs built before and after it with the same
+    /// context when they have the same style.
+    pub(crate) style: Arc<ParagraphStyle>,
+    /// Shared like [`Self::style`].
+    pub(crate) limits: Arc<Limits>,
     pub(crate) text: String,
     pub(crate) items: Vec<Item>,
     pub(crate) styles: Vec<InlineStyle>,
@@ -157,6 +162,69 @@ pub(crate) struct ParagraphData {
     pub(crate) baselines: HashMap<NodeId, BaselineKind>,
 }
 
+/// The styles and limits of the paragraphs a context built last.
+///
+/// Paragraphs of one block of content, such as the cells of a table, are
+/// mostly given the same style and limits, so each shares the previous
+/// paragraph's instead of holding a copy. Styles are the same when no
+/// property tells them apart, the sign of a zero and the payload of a NaN
+/// included, which is how a builder interns its inline styles.
+#[derive(Debug, Default)]
+pub(crate) struct SharedInputs {
+    /// The two styles used last, the latest first: a paragraph with a
+    /// first-line style is built from two.
+    styles: [Option<Arc<ParagraphStyle>>; 2],
+    limits: Option<Arc<Limits>>,
+}
+
+impl SharedInputs {
+    pub(crate) fn style(&mut self, style: ParagraphStyle) -> Arc<ParagraphStyle> {
+        let found = self
+            .styles
+            .iter()
+            .flatten()
+            .find(|last| same_paragraph_style(last, &style))
+            .cloned();
+        let shared = found.unwrap_or_else(|| Arc::new(style));
+        if !matches!(&self.styles[0], Some(latest) if Arc::ptr_eq(latest, &shared)) {
+            self.styles.swap(0, 1);
+            self.styles[0] = Some(shared.clone());
+        }
+        shared
+    }
+
+    pub(crate) fn limits(&mut self, limits: &Limits) -> Arc<Limits> {
+        match &self.limits {
+            Some(last) if **last == *limits => last.clone(),
+            _ => self.limits.insert(Arc::new(limits.clone())).clone(),
+        }
+    }
+}
+
+fn same_paragraph_style(a: &ParagraphStyle, b: &ParagraphStyle) -> bool {
+    use crate::builder::same_inline;
+    let ParagraphStyle {
+        writing_mode,
+        direction,
+        unicode_bidi_plaintext,
+        root,
+        first_line,
+        line_height_quirk,
+        force_root_strut,
+    } = a;
+    *writing_mode == b.writing_mode
+        && *direction == b.direction
+        && *unicode_bidi_plaintext == b.unicode_bidi_plaintext
+        && *line_height_quirk == b.line_height_quirk
+        && *force_root_strut == b.force_root_strut
+        && same_inline(root, &b.root)
+        && match (first_line, &b.first_line) {
+            (None, None) => true,
+            (Some(a), Some(b)) => same_inline(a, b),
+            _ => false,
+        }
+}
+
 /// The most bytes a vector may hold for [`trim`] to move it.
 const TRIM_BYTES: usize = 1024;
 
@@ -168,6 +236,12 @@ pub(crate) fn trim<T>(values: &mut Vec<T>) {
 }
 
 impl ParagraphData {
+    /// The limits, as a copy of its own once it is changed.
+    #[cfg(test)]
+    pub(crate) fn limits_mut(&mut self) -> &mut Limits {
+        Arc::make_mut(&mut self.limits)
+    }
+
     /// Give back the room its small vectors grew beyond their lengths. A
     /// paragraph is not extended once it is built, and a vector grows to
     /// four elements on its first push, so a paragraph of a few words would

@@ -581,7 +581,7 @@ fn shape_ellipsis(
     };
     let items = [item];
     let features = crate::shape::FeatureSets::new(&items, &data.styles);
-    let mut limits = data.limits.clone();
+    let mut limits = crate::limits::Limits::clone(&data.limits);
     limits.max_shaped_glyphs = Some(16);
     let mut warnings = std::mem::take(&mut cx.warnings);
     let result = crate::shape::shape_items_env(

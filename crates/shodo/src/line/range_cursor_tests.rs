@@ -392,7 +392,7 @@ fn equal_text_ranges_keep_storage_split_owners_separate() {
 #[test]
 fn scalar_clipped_hyphen_keeps_clipped_warning_before_hyphen_warning() {
     let (mut p, start, end) = clipped_hyphen_paragraph();
-    let limits = &mut std::sync::Arc::get_mut(&mut p.data).unwrap().limits;
+    let limits = std::sync::Arc::get_mut(&mut p.data).unwrap().limits_mut();
     limits.max_reshape_window_bytes = Some(1);
     limits.max_shaped_glyphs = Some(0);
     limits.max_warnings = Some(1);
@@ -421,12 +421,12 @@ fn planned_clipped_hyphen_keeps_reference_warning_order() {
     for window in [1, 2, 4096] {
         std::sync::Arc::get_mut(&mut p.data)
             .unwrap()
-            .limits
+            .limits_mut()
             .max_reshape_window_bytes = Some(window);
         for glyphs in [0, 1, 2] {
             std::sync::Arc::get_mut(&mut p.data)
                 .unwrap()
-                .limits
+                .limits_mut()
                 .max_shaped_glyphs = Some(glyphs);
             for warning_cap in [1, 2, 16] {
                 let mut cx = LayoutContext::new();
